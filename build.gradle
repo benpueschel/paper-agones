@@ -1,6 +1,7 @@
 plugins {
     id "org.jetbrains.kotlin.jvm" version "2.0.0"
     id 'java-library'
+	id "com.google.protobuf" version "0.9.4"
 }
 
 group 'io.kubecloud'
@@ -17,6 +18,13 @@ kotlin {
 	jvmToolchain(21)
 }
 
+jar {
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+	from {
+		configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+	}
+}
+
 repositories {
     mavenCentral()
     maven {
@@ -28,7 +36,12 @@ repositories {
 
 dependencies {
 	implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0-RC'
+	implementation 'com.github.Cubxity:AgonesKt:v0.1.2'
+
+	implementation 'io.grpc:grpc-netty:1.37.0'
+    implementation("io.grpc:grpc-kotlin-stub:1.4.1")
+    implementation("io.grpc:grpc-protobuf:1.37.0")
+    implementation("com.google.protobuf:protobuf-kotlin:4.27.2")
+
 	compileOnly 'io.papermc.paper:paper-api:1.21-R0.1-SNAPSHOT'
-	api 'com.github.Cubxity:AgonesKt:v0.1.2'
-	runtimeOnly 'io.grpc:grpc-netty:1.37.0'
 }
