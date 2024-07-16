@@ -1,3 +1,4 @@
+@file:JvmName("LifecycleService")
 package net.kubecloud
 
 import dev.cubxity.libs.agones.AgonesSDK
@@ -12,17 +13,20 @@ class LifecycleService {
 
     private val agones: AgonesSDK
     private val thread: Thread
-	private var mutex = Mutex()
+	private val config: AgonesConfig
+	private val mutex = Mutex()
 
 	private var running = true
 	private var ready = false
+	private var capacity = -1L
 
 	private var connectedPlayers = mutableSetOf<String>()
 	private var disconnectedPlayers = mutableSetOf<String>()
 
-    public constructor() {
-        agones = AgonesSDK()
-        thread = Thread(this::run)
+    public constructor(config: AgonesConfig) {
+		this.config = config
+        this.agones = AgonesSDK()
+        this.thread = Thread(this::run)
     }
 
 	fun start() {
@@ -31,6 +35,7 @@ class LifecycleService {
 
     fun run() = runBlocking {
 		var previousReady = false
+		var oldCapacity = -1L
 		launch {
 			while (running) {
 				health()
@@ -44,17 +49,40 @@ class LifecycleService {
 					agones.ready()
 					previousReady = true
 				}
-				for (player in connectedPlayers) {
-					agones.alpha.playerConnect(player)
-				}
-				for (player in disconnectedPlayers) {
-					agones.alpha.playerDisconnect(player)
-				}
 				mutex.unlock()
+
+				if (config.features.playerCounter) {
+					mutex.lock()
+
+					if (capacity != -1L && capacity != oldCapacity) {
+						agones.alpha.setPlayerCapacity(capacity)
+						oldCapacity = capacity
+					}
+
+					// Copy player lists to avoid locking for too long
+					val connected = connectedPlayers.toSet()
+					val disconnected = disconnectedPlayers.toSet()
+					connectedPlayers.clear()
+					disconnectedPlayers.clear()
+					mutex.unlock()
+
+					for (player in connected) {
+						agones.alpha.playerConnect(player)
+					}
+					for (player in disconnected) {
+						agones.alpha.playerDisconnect(player)
+					}
+				}
 				delay(100)
 			}
 		}
     }
+
+	public fun setCapacity(_capacity: Long) = runBlocking {
+		mutex.lock()
+		capacity = _capacity
+		mutex.unlock()
+	}
 
 	public fun connectPlayer(player: UUID) = runBlocking {
 		mutex.lock()
